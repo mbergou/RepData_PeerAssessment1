@@ -8,18 +8,193 @@ output:
 
 ## Loading and preprocessing the data
 
+We first unzip the file containing the data and then load it using the `read.csv` function.
 
+```{r}
+unzip("activity.zip")
+activity <- read.csv("activity.csv")
+str(activity)
+```
+
+We can see that the results are stored in the `activity` dataframe, consisting of `r nrow(activity)` observations of `r ncol(activity)` variables. The `date` variable contains factors, which will be more useful if represented as Date objects.
+
+```{r}
+activity$date <- as.Date(activity$date, "%Y-%m-%d", tz="UTC")
+str(activity)
+```
+
+Using the `unique` function, we can take a look to see how the interval is encoded.
+
+```{r}
+unique(activity$interval)
+```
+
+This shows that the interval is represented as an integer, where the last two digits are the minutes that the interval starts, and the first two (if present) are the hour.
 
 ## What is mean total number of steps taken per day?
 
+We first add up the number of steps for each day in the dataframe, ignoring missing values (the default).
 
+```{r}
+totalStepsPerDay <- aggregate(steps ~ date, activity, sum)
+head(totalStepsPerDay)
+```
+
+With this data aggregated, we can get a histogram of the number of steps per day using the `ggplot2` package.
+
+```{r}
+library(ggplot2)
+ggplot(totalStepsPerDay, aes(steps)) + geom_histogram(bins=30) + xlab("Steps per day")
+```
+
+We can compute the mean and the median of the number of steps taken per day as follows.
+
+```{r}
+avgStepsPerDay <- mean(totalStepsPerDay$steps, na.rm=TRUE)
+print(avgStepsPerDay)
+
+medianStepsPerDay <- median(totalStepsPerDay$steps, na.rm=TRUE)
+print(medianStepsPerDay)
+```
+
+As seen here, the median is only slightly lower than the mean, indicating a fairly balanced distribution.
 
 ## What is the average daily activity pattern?
 
+We first compute the mean of the number of steps for each of the intervals.
 
+```{r}
+stepsPerInterval <- aggregate(steps ~ interval, activity, mean)
+head(stepsPerInterval)
+```
+
+We next plot this data to show the trend of the number of steps over a single day.
+
+```{r}
+ggplot(stepsPerInterval, aes(interval, steps)) +
+  geom_line() +
+  xlab("Interval") +
+  ylab("Average number of steps")
+```
+
+We can extract the interval with the maximum number of steps as follows.
+
+```{r}
+intervalWithMaxSteps <- with(stepsPerInterval, interval[which.max(steps)])
+print(intervalWithMaxSteps)
+```
+
+We next convert this to slightly nicer formatted military time to show the starting time of the 5 minute interval with the greatest number of steps on average.
+
+```{r}
+mins <- intervalWithMaxSteps %% 100
+hours <- (intervalWithMaxSteps - mins) / 100
+sprintf("%02d:%02d", hours, mins)
+```
 
 ## Imputing missing values
 
+To compute the number of rows that have missing values, we can look at how many non-complete cases there are (i.e., rows that have no NA values) in the data frame.
 
+```{r}
+sum(!complete.cases(activity))
+```
+
+To impute the missing values, we will replace NAs with the mean for that interval.
+
+```{r}
+imputedActivity <- activity
+for (i in seq(from=1, to=nrow(activity))) {
+  if (is.na(activity$steps[i])) {
+    interval = activity$interval[i]
+    avgSteps = stepsPerInterval$steps[stepsPerInterval$interval == interval]
+    imputedActivity$steps[i] = avgSteps
+  }
+}
+str(imputedActivity)
+```
+
+To ensure that there are no more missing values, we can again check to see that no rows have NA values.
+
+```{r}
+sum(!complete.cases(imputedActivity))
+```
+
+We next show a histogram of the number of steps per day including the imputed data. In order to highlight the difference between this data and the original data, we will show the histogram overlayed on top of the original histogram.
+
+```{r}
+imputedStepsPerDay <- aggregate(steps ~ date, imputedActivity, sum)
+
+ggplot() +
+  # Original data
+  geom_histogram(data=totalStepsPerDay, aes(steps, fill="r", color="r"), alpha=0.4, bins=30) +
+  # Imputed data
+  geom_histogram(data=imputedStepsPerDay, aes(steps, fill="b", color="b"), alpha=0.4, bins=30) +
+  # x-axis label
+  xlab("Steps per day") +
+  # Legend
+  scale_color_manual(name="Dataset", values=c("r"="red", "b"="blue"), labels=c("b"="Imputed", "r"="Original")) +
+  scale_fill_manual(name="Dataset", values=c("r"="red", "b"="blue"), labels=c("b"="Imputed", "r"="Original"))
+```
+
+As can be seen in this plot, the blue (imputed) and red (original) data perfectly line up, except near the mean of the distribution, where we now have more observations for the imputed data. We can look at the mean of the new data compared to the old data to confirm that all new observations are indeed at the mean.
+
+```{r}
+avgImputedStepsPerDay <- mean(imputedStepsPerDay$steps, na.rm=TRUE)
+print(avgImputedStepsPerDay)
+avgImputedStepsPerDay - avgStepsPerDay
+```
+
+This shows that the mean is unchanged by imputing the data. This makes sense, since the following computation shows that the imputed data we added was for entire days, and because we chose to use the mean for each interval for any missing data, the mean for missing days should equal the mean for the overall distribution.
+
+```{r}
+# Find days that have missing data.
+missingDays <- unique(activity$date[!complete.cases(activity)])
+print(missingDays)
+```
+
+This shows there were only a handful of days on which the data was missing. We can next take a look at whether any of those days have any data, or whether all of the data is missing for those days.
+
+```{r}
+unique(activity$steps[activity$date %in% missingDays])
+```
+
+Since the only value for those days is `NA`, we are filling in the steps per interval in those days with the average value of the steps for that interval. This means that the total number of steps for those days will match the average number of steps per day, as shown in the histogram.
+
+We saw previously that the median was slightly lower than the mean for the original data. Since we are adding more instances where the number of steps per day equals the mean, we expect the median to be slightly higher than the original, which is confirmed by the following computation.
+
+```{r}
+medianImputedStepsPerDay <- median(imputedStepsPerDay$steps, na.rm=TRUE)
+print(medianImputedStepsPerDay)
+medianImputedStepsPerDay - medianStepsPerDay
+```
+
+As expected, there is a small difference in the medians (`r medianImputedStepsPerDay - medianStepsPerDay`), with the median for the imputed data being larger than the original median.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+We first add another variable called `day.of.week` to the data frame containing the imputed values consisting of a factor indicating whether the day corresponds to a weekday or a weekend.
+
+```{r}
+library(dplyr)
+imputedActivity$day.of.week <-
+  weekdays(imputedActivity$date) %in%
+  c("Saturday", "Sunday") %>%
+  ifelse("weekend", "weekday") %>%
+  as.factor
+str(imputedActivity)
+```
+
+We next display a plot showing the daily activity patterns for both weekends and weekdays.
+
+```{r}
+imputedStepsPerInterval <- aggregate(steps ~ interval + day.of.week, imputedActivity, mean)
+minSteps = min(imputedStepsPerInterval$steps)
+maxSteps = max(imputedStepsPerInterval$steps)
+ggplot(imputedStepsPerInterval, aes(interval, steps)) +
+  geom_line() +
+  facet_grid(day.of.week ~ .) +
+  scale_y_continuous(limits=c(minSteps, maxSteps))
+```
+
+As seen in this plot, the average number of steps goes up beyond near-zero earlier in the day during weekdays. Similarly, the number of steps taken during morning hours is higher during weekdays. Conversely, there are generally more steps taken during the day and around 8pm on weekends than there are on weekdays.
