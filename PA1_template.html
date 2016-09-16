@@ -277,16 +277,8 @@ print(medianImputedStepsPerDay)</code></pre>
 <div id="are-there-differences-in-activity-patterns-between-weekdays-and-weekends" class="section level2">
 <h2>Are there differences in activity patterns between weekdays and weekends?</h2>
 <p>We first add another variable called <code>day.of.week</code> to the data frame containing the imputed values consisting of a factor indicating whether the day corresponds to a weekday or a weekend.</p>
-<pre class="r"><code>library(dplyr)</code></pre>
-<pre><code>## 
-## Attaching package: 'dplyr'</code></pre>
-<pre><code>## The following objects are masked from 'package:stats':
-## 
-##     filter, lag</code></pre>
-<pre><code>## The following objects are masked from 'package:base':
-## 
-##     intersect, setdiff, setequal, union</code></pre>
-<pre class="r"><code>imputedActivity$day.of.week &lt;-
+<pre class="r"><code>library(dplyr)
+imputedActivity$day.of.week &lt;-
   weekdays(imputedActivity$date) %in%
   c(&quot;Saturday&quot;, &quot;Sunday&quot;) %&gt;%
   ifelse(&quot;weekend&quot;, &quot;weekday&quot;) %&gt;%
